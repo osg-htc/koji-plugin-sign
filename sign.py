@@ -22,8 +22,10 @@ def sign(cbtype, *args, **kws):
     br = get_buildroot(br_id)
     tag_name = br['tag_name']
 
+    logging.getLogger('koji.plugin.sign').info("Got package with tag_name %s", tag_name)
+
     # Get GPG info using the config for the tag name
-    from ConfigParser import ConfigParser
+    from ConfigParser import ConfigParser, NoOptionError
     config = ConfigParser()
     config.read(config_file)
     if not config.has_section(tag_name):
@@ -33,6 +35,16 @@ def sign(cbtype, *args, **kws):
     gpg_path = config.get(tag_name, 'gpg_path')
     gpg_name = config.get(tag_name, 'gpg_name')
     gpg_pass = config.get(tag_name, 'gpg_pass')
+    try:
+        enabled = config.getboolean(tag_name, 'enabled')
+    except NoOptionError:
+        # Note that signing is _enabled_ by default
+        enabled = True
+
+    
+    if not enabled:
+        logging.getLogger('koji.plugin.sign').info('Signing not enabled for this tag.')
+        return
 
     # Get the package paths set up
     from koji import pathinfo
