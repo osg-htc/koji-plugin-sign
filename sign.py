@@ -78,19 +78,28 @@ def sign(cbtype, *args, **kws):
         pex.sendline('\r')
     else:
         pex.sendline(gpg_pass)
-    i = pex.expect(['good', 'failed', 'skipping', pexpect.TIMEOUT])
+    i = pex.expect(['good', 'failed', 'skipping', 'error', pexpect.TIMEOUT])
     pex.expect(pexpect.EOF)
+    pex.close()
+    ok = False
     if i == 0:
         logging.getLogger('koji.plugin.sign').info('Package sign successful!')
+        ok = True
     elif i == 1:
         logging.getLogger('koji.plugin.sign').error('Pass phrase check failed!')
     elif i == 2:
         logging.getLogger('koji.plugin.sign').error('Package sign skipped!')
     elif i == 3:
+        logging.getLogger('koji.plugin.sign').error('Package sign failed!')
+    elif i == 4:
         logging.getLogger('koji.plugin.sign').error('Package sign timed out!')
+    elif pex.signalstatus:
+        logging.getLogger('koji.plugin.sign').error('rpmsign died with signal %s' % pex.signalstatus)
+    elif pex.exitstatus:
+        logging.getLogger('koji.plugin.sign').error('rpmsign exited with error %s' % pex.exitstatus)
     else:
         logging.getLogger('koji.plugin.sign').error('Unexpected sign result!')
-    if i != 0:
+    if not ok:
         # Rewind in rpm output
         fout.seek(0)
         # Add GPG errors to log
