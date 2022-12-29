@@ -36,6 +36,10 @@ def sign(cbtype, *args, **kws):
     gpg_name = config.get(tag_name, 'gpg_name')
     gpg_pass = config.get(tag_name, 'gpg_pass')
     try:
+        gpg_digest_algo = config.get(tag_name, 'gpg_digest_algo')
+    except NoOptionError:
+        gpg_digest_algo = None
+    try:
         enabled = config.getboolean(tag_name, 'enabled')
     except NoOptionError:
         # Note that signing is _enabled_ by default
@@ -62,6 +66,8 @@ def sign(cbtype, *args, **kws):
     rpm_cmd = "%s --resign --define '_signature gpg'" % rpm
     rpm_cmd += " --define '_gpgbin %s'" % gpgbin
     rpm_cmd += " --define '_gpg_path %s'" % gpg_path
+    if gpg_digest_algo:
+        rpm_cmd += " --define '_gpg_digest_algo %s'" % gpg_digest_algo
     rpm_cmd += " --define '_gpg_name %s' %s" % (gpg_name, rpms)
     pex = pexpect.spawn(rpm_cmd, timeout=1000)
     # Add rpm output to a temporary file
