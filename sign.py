@@ -18,14 +18,17 @@ def sign(cbtype, *args, **kws):
     import sys
     sys.path.insert(0, '/usr/share/koji-hub')
     from kojihub import get_buildroot
-    br_id = kws['brmap'].values()[0]
+    br_id = list(kws['brmap'].values())[0]
     br = get_buildroot(br_id)
     tag_name = br['tag_name']
 
     logging.getLogger('koji.plugin.sign').info("Got package with tag_name %s", tag_name)
 
     # Get GPG info using the config for the tag name
-    from ConfigParser import ConfigParser, NoOptionError
+    try:
+        from ConfigParser import ConfigParser, NoOptionError
+    except ImportError:  # Python 3
+        from configparser import ConfigParser, NoOptionError
     config = ConfigParser()
     config.read(config_file)
     if not config.has_section(tag_name):
@@ -107,7 +110,7 @@ def sign(cbtype, *args, **kws):
             if 'gpg:' in line:
                 logging.getLogger('koji.plugin.sign').error(line.rstrip('\n'))
         fout.close()
-        raise Exception, 'Package sign failed!'
+        raise Exception('Package sign failed!')
     else:
         fout.close()
 
