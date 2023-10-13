@@ -1,6 +1,6 @@
 Name:           koji-plugin-sign
 Version:        1.4.0
-Release:        12%{?dist}
+Release:        13%{?dist}
 Summary:        GPG signing plugin for koji-hub
 
 Group:          Applications/System
@@ -42,6 +42,9 @@ install -D sign.py -m 0755 $RPM_BUILD_ROOT/usr/lib/koji-hub-plugins/sign.py
 
 
 %changelog
+* Fri Oct 13 2023 Matt Westphall <westphall@wisc.edu> - 1.4.0-13
+- Update pexpect prompt check for yubikey with pinentry-mode loopback
+
 * Fri Oct 13 2023 Mátyás Selmeci <matyas@cs.wisc.edu> - 1.4.0-12
 - First build from GitHub sources
 

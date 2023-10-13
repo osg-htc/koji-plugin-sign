@@ -5,7 +5,11 @@
 #     Paul B Schroeder <paulbsch "at" vbridges "dot" com>
 
 from koji.plugin import register_callback
+from tempfile import TemporaryFile
 import logging
+import os
+import pexpect
+import re
 
 # Configuration file in /etc like for other plugins
 config_file = '/etc/koji-hub/plugins/sign.conf'
@@ -61,8 +65,6 @@ def sign(cbtype, *args, **kws):
        rpms += '%s/%s ' % (uploadpath, relpath)
 
     # Get the packages signed
-    import pexpect
-    import os
     os.environ['LC_ALL'] = 'C'
     logging.getLogger('koji.plugin.sign').info('Attempting to sign packages'
        ' (%s) with key "%s"' % (rpms, gpg_name))
@@ -72,47 +74,35 @@ def sign(cbtype, *args, **kws):
     if gpg_digest_algo:
         rpm_cmd += " --define '_gpg_digest_algo %s'" % gpg_digest_algo
     rpm_cmd += " --define '_gpg_name %s' %s" % (gpg_name, rpms)
-    pex = pexpect.spawn(rpm_cmd, timeout=1000)
+    pex = pexpect.spawn(rpm_cmd, timeout=30)
     # Add rpm output to a temporary file
-    fout = os.tmpfile()
+    fout = TemporaryFile()
     pex.logfile = fout
-    pex.expect('(E|e)nter (P|p)ass (P|p)hrase:', timeout=1000)
-    if not gpg_pass:
-        pex.sendline('\r')
-    else:
-        pex.sendline(gpg_pass)
-    i = pex.expect(['good', 'failed', 'skipping', 'error', pexpect.TIMEOUT])
-    pex.expect(pexpect.EOF)
+    result = 0
+    # Yubikey occassionally requests password twice, I have no idea why
+    while result == 0:
+        # With pinentry-mode loopback, this is the only prompt output by GPG
+        result = pex.expect(['Enter passphrase:', pexpect.EOF, pexpect.TIMEOUT], timeout=30)
+        if result == 0:
+            pex.sendline(gpg_pass)
+
     pex.close()
-    ok = False
-    if i == 0:
+    ok = True
+    if result < 2:
         logging.getLogger('koji.plugin.sign').info('Package sign successful!')
-        ok = True
-    elif i == 1:
-        logging.getLogger('koji.plugin.sign').error('Pass phrase check failed!')
-    elif i == 2:
-        logging.getLogger('koji.plugin.sign').error('Package sign skipped!')
-    elif i == 3:
-        logging.getLogger('koji.plugin.sign').error('Package sign failed!')
-    elif i == 4:
-        logging.getLogger('koji.plugin.sign').error('Package sign timed out!')
-    elif pex.signalstatus:
-        logging.getLogger('koji.plugin.sign').error('rpmsign died with signal %s' % pex.signalstatus)
-    elif pex.exitstatus:
-        logging.getLogger('koji.plugin.sign').error('rpmsign exited with error %s' % pex.exitstatus)
     else:
-        logging.getLogger('koji.plugin.sign').error('Unexpected sign result!')
+        logging.getLogger('koji.plugin.sign').error('Package sign timed out!')
+        ok = False
     if not ok:
-        # Rewind in rpm output
         fout.seek(0)
         # Add GPG errors to log
+        errors = ''
         for line in fout.readlines():
-            if 'gpg:' in line:
-                logging.getLogger('koji.plugin.sign').error(line.rstrip('\n'))
+            errors += line.decode().replace(gpg_pass, '<gpg pass>')
         fout.close()
-        raise Exception('Package sign failed!')
+        raise Exception('Package sign failed!\n' + errors)
     else:
         fout.close()
 
-register_callback('preImport', sign)
 
+register_callback('preImport', sign)
