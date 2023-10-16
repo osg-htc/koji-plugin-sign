@@ -14,6 +14,13 @@ import re
 # Configuration file in /etc like for other plugins
 config_file = '/etc/koji-hub/plugins/sign.conf'
 
+GPG_EXPECTS = ['Enter passphrase:', pexpect.EOF, 'failed', 'skipping', 'error', pexpect.TIMEOUT]
+ERROR_MESSAGES = {
+    3: 'Package signing failed!',
+    4: 'Package signing skipped!',
+    5: 'Package signing timed out!'
+}
+
 def sign(cbtype, *args, **kws):
     if kws['type'] != 'build':
        return
@@ -60,9 +67,8 @@ def sign(cbtype, *args, **kws):
     # Get the package paths set up
     from koji import pathinfo
     uploadpath = pathinfo.work()
-    rpms = ''
-    for relpath in [kws['srpm']] + kws['rpms']:
-       rpms += '%s/%s ' % (uploadpath, relpath)
+    rpm_paths = [f'{uploadpath}/{relpath}' for relpath in [kws['srpm']] + kws['rpms']]
+    rpms = ' '.join(rpm_paths)
 
     # Get the packages signed
     os.environ['LC_ALL'] = 'C'
@@ -78,11 +84,12 @@ def sign(cbtype, *args, **kws):
     # Add rpm output to a temporary file
     fout = TemporaryFile()
     pex.logfile = fout
+
     result = 0
     # Yubikey occassionally requests password twice, I have no idea why
     while result == 0:
         # With pinentry-mode loopback, this is the only prompt output by GPG
-        result = pex.expect(['Enter passphrase:', pexpect.EOF, pexpect.TIMEOUT], timeout=30)
+        result = pex.expect(GPG_EXPECTS, timeout=30)
         if result == 0:
             pex.sendline(gpg_pass)
 
@@ -91,7 +98,7 @@ def sign(cbtype, *args, **kws):
     if result < 2:
         logging.getLogger('koji.plugin.sign').info('Package sign successful!')
     else:
-        logging.getLogger('koji.plugin.sign').error('Package sign timed out!')
+        logging.getLogger('koji.plugin.sign').error(ERROR_MESSAGES.get(result, "Unknown signing error!"))
         ok = False
     if not ok:
         fout.seek(0)
@@ -103,6 +110,21 @@ def sign(cbtype, *args, **kws):
         raise Exception('Package sign failed!\n' + errors)
     else:
         fout.close()
+
+
+    # Sanity check, ensure that a signature exists for each rpm
+    non_signed_rpms = []
+    for processed_rpm in rpm_paths:
+        rpm_cmd = f"{rpm} -qpi {processed_rpm}"
+        pex = pexpect.spawn(rpm_cmd, timeout=1000)
+        result = pex.expect(['Signature.*:.*Key ID.*',pexpect.EOF], timeout=5)
+        pex.close()
+        if result != 0:
+            non_signed_rpms.append(processed_rpm)
+
+    if len(non_signed_rpms) > 0:
+        raise Exception('Signatures missing from the following packages: ' + ' '.join(non_signed_rpms))
+
 
 
 register_callback('preImport', sign)
