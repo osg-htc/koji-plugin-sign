@@ -11,13 +11,19 @@ import os
 import pexpect
 import re
 
+# Get the tag name from the buildroot map
+import sys
+sys.path.insert(0, '/usr/share/koji-hub')
+from kojihub import get_buildroot
+
 # Configuration file in /etc like for other plugins
 config_file = '/etc/koji-hub/plugins/sign.conf'
 
 GPG_EXPECTS = ['Enter passphrase:', pexpect.EOF, 'failed', 'skipping', 'error', pexpect.TIMEOUT]
 ERROR_MESSAGES = {
-    3: 'Package signing failed!',
-    4: 'Package signing skipped!',
+    2: 'Package signing failed!',
+    3: 'Package signing skipped!',
+    4: 'Package signing error!',
     5: 'Package signing timed out!'
 }
 
@@ -25,10 +31,6 @@ def sign(cbtype, *args, **kws):
     if kws['type'] != 'build':
        return
 
-    # Get the tag name from the buildroot map
-    import sys
-    sys.path.insert(0, '/usr/share/koji-hub')
-    from kojihub import get_buildroot
     br_id = list(kws['brmap'].values())[0]
     br = get_buildroot(br_id)
     tag_name = br['tag_name']
