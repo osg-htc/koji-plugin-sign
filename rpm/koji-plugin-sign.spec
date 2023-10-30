@@ -39,6 +39,7 @@ install -D post_sign.py -m 0755 $RPM_BUILD_ROOT/usr/lib/koji-hub-plugins/post_si
 %files
 %config(noreplace) %attr(0600,apache,apache) /etc/koji-hub/plugins/sign.conf
 %attr(0755,root,root) /usr/lib/koji-hub-plugins/sign.py*
+%attr(0755,root,root) /usr/lib/koji-hub-plugins/post_sign.py*
 
 
 
