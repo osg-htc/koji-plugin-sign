@@ -10,6 +10,7 @@ import logging
 import os
 import pexpect
 import re
+from configparser import ConfigParser, NoOptionError
 
 # Get the tag name from the buildroot map
 import sys
@@ -37,11 +38,6 @@ def sign(cbtype, *args, **kws):
 
     logging.getLogger('koji.plugin.sign').info("Got package with tag_name %s", tag_name)
 
-    # Get GPG info using the config for the tag name
-    try:
-        from ConfigParser import ConfigParser, NoOptionError
-    except ImportError:  # Python 3
-        from configparser import ConfigParser, NoOptionError
     config = ConfigParser()
     config.read(config_file)
     if not config.has_section(tag_name):
@@ -97,10 +93,11 @@ def sign(cbtype, *args, **kws):
 
     pex.close()
     ok = True
-    if result < 2:
+    if result < 2 and pex.exitstatus == 0:
         logging.getLogger('koji.plugin.sign').info('Package sign successful!')
     else:
         logging.getLogger('koji.plugin.sign').error(ERROR_MESSAGES.get(result, "Unknown signing error!"))
+        logging.getLogger('koji.plugin.sign').error("rpmsign exited with exit code %s, signal status %s", pex.exitstatus, pex.signalstatus)
         ok = False
     if not ok:
         fout.seek(0)
