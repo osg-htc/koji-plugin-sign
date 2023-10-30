@@ -1,6 +1,6 @@
 Name:           koji-plugin-sign
 Version:        1.4.0
-Release:        14%{?dist}
+Release:        15%{?dist}
 Summary:        GPG signing plugin for koji-hub
 
 Group:          Applications/System
@@ -33,6 +33,7 @@ exit 0
 mkdir -p $RPM_BUILD_ROOT
 install -D sign.conf -m 0600 $RPM_BUILD_ROOT/etc/koji-hub/plugins/sign.conf
 install -D sign.py -m 0755 $RPM_BUILD_ROOT/usr/lib/koji-hub-plugins/sign.py
+install -D post_sign.py -m 0755 $RPM_BUILD_ROOT/usr/lib/koji-hub-plugins/post_sign.py
 
 
 %files
@@ -42,6 +43,9 @@ install -D sign.py -m 0755 $RPM_BUILD_ROOT/usr/lib/koji-hub-plugins/sign.py
 
 
 %changelog
+* Fri Oct 27 2023 Matt Westphall <westphall@wisc.edu> - 1.4.0-15
+- Add callback to run koji write-signed-rpm after signing
+
 * Mon Oct 16 2023 Matt Westphall <westphall@wisc.edu> - 1.4.0-14
 - Re-add more robust error checking for new prompts
 

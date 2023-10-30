@@ -10,14 +10,21 @@ import logging
 import os
 import pexpect
 import re
+from configparser import ConfigParser, NoOptionError
+
+# Get the tag name from the buildroot map
+import sys
+sys.path.insert(0, '/usr/share/koji-hub')
+from kojihub import get_buildroot
 
 # Configuration file in /etc like for other plugins
 config_file = '/etc/koji-hub/plugins/sign.conf'
 
 GPG_EXPECTS = ['Enter passphrase:', pexpect.EOF, 'failed', 'skipping', 'error', pexpect.TIMEOUT]
 ERROR_MESSAGES = {
-    3: 'Package signing failed!',
-    4: 'Package signing skipped!',
+    2: 'Package signing failed!',
+    3: 'Package signing skipped!',
+    4: 'Package signing error!',
     5: 'Package signing timed out!'
 }
 
@@ -25,21 +32,12 @@ def sign(cbtype, *args, **kws):
     if kws['type'] != 'build':
        return
 
-    # Get the tag name from the buildroot map
-    import sys
-    sys.path.insert(0, '/usr/share/koji-hub')
-    from kojihub import get_buildroot
     br_id = list(kws['brmap'].values())[0]
     br = get_buildroot(br_id)
     tag_name = br['tag_name']
 
     logging.getLogger('koji.plugin.sign').info("Got package with tag_name %s", tag_name)
 
-    # Get GPG info using the config for the tag name
-    try:
-        from ConfigParser import ConfigParser, NoOptionError
-    except ImportError:  # Python 3
-        from configparser import ConfigParser, NoOptionError
     config = ConfigParser()
     config.read(config_file)
     if not config.has_section(tag_name):
@@ -95,10 +93,11 @@ def sign(cbtype, *args, **kws):
 
     pex.close()
     ok = True
-    if result < 2:
+    if result < 2 and pex.exitstatus == 0:
         logging.getLogger('koji.plugin.sign').info('Package sign successful!')
     else:
         logging.getLogger('koji.plugin.sign').error(ERROR_MESSAGES.get(result, "Unknown signing error!"))
+        logging.getLogger('koji.plugin.sign').error("rpmsign exited with exit code %s, signal status %s", pex.exitstatus, pex.signalstatus)
         ok = False
     if not ok:
         fout.seek(0)
