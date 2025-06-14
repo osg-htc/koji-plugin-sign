@@ -23,7 +23,7 @@ def validate_args(sigkey, sighash, build, rpm):
     if rpm is None:
         missing_args.append('rpm')
 
-    if rpm is not None and 'buildroot_id' not in rpm:
+    if rpm is not None and not rpm.get('buildroot_id'):
         missing_args.append('rpm.buildroot_id')
     if build is not None and 'nvr' not in build:
         missing_args.append('build.nvr')
