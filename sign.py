@@ -27,6 +27,7 @@ ERROR_MESSAGES = {
     4: 'Package signing error!',
     5: 'Package signing timed out!'
 }
+SIGNING_TIMEOUT = 120
 
 def sign(cbtype, *args, **kws):
     if kws['type'] != 'build':
@@ -78,7 +79,7 @@ def sign(cbtype, *args, **kws):
     if gpg_digest_algo:
         rpm_cmd += " --define '_gpg_digest_algo %s'" % gpg_digest_algo
     rpm_cmd += " --define '_gpg_name %s' %s" % (gpg_name, rpms)
-    pex = pexpect.spawn(rpm_cmd, timeout=30)
+    pex = pexpect.spawn(rpm_cmd, timeout=SIGNING_TIMEOUT)
     # Add rpm output to a temporary file
     fout = TemporaryFile()
     pex.logfile = fout
