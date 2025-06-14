@@ -1,6 +1,6 @@
 Name:           koji-plugin-sign
 Version:        1.4.0
-Release:        15%{?dist}
+Release:        16%{?dist}
 Summary:        GPG signing plugin for koji-hub
 
 Group:          Applications/System
@@ -44,6 +44,10 @@ install -D post_sign.py -m 0755 $RPM_BUILD_ROOT/usr/lib/koji-hub-plugins/post_si
 
 
 %changelog
+* Fri Jun 13 2025 Matyas Selmeci <mselmeci@wisc.edu> - 1.4.0-16
+- Handle buildroot_id being present in the hash but None
+  (fixes ParameterError when using 'koji import')
+
 * Fri Oct 27 2023 Matt Westphall <westphall@wisc.edu> - 1.4.0-15
 - Add callback to run koji write-signed-rpm after signing
 
