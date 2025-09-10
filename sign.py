@@ -9,7 +9,7 @@ from tempfile import TemporaryFile
 import logging
 import os
 import pexpect
-import re
+import shlex
 from configparser import ConfigParser, NoOptionError
 
 # Get the tag name from the buildroot map
@@ -58,7 +58,6 @@ def sign(cbtype, *args, **kws):
         # Note that signing is _enabled_ by default
         enabled = True
 
-    
     if not enabled:
         logging.getLogger('koji.plugin.sign').info('Signing not enabled for this tag.')
         return
@@ -78,38 +77,41 @@ def sign(cbtype, *args, **kws):
     rpm_cmd += " --define '_gpg_path %s'" % gpg_path
     if gpg_digest_algo:
         rpm_cmd += " --define '_gpg_digest_algo %s'" % gpg_digest_algo
-    rpm_cmd += " --define '_gpg_name %s' %s" % (gpg_name, rpms)
-    pex = pexpect.spawn(rpm_cmd, timeout=SIGNING_TIMEOUT)
-    # Add rpm output to a temporary file
-    fout = TemporaryFile()
-    pex.logfile = fout
+    rpm_cmd += " --define '_gpg_name %s'" % gpg_name
 
-    result = 0
-    # Yubikey occassionally requests password twice, I have no idea why
-    while result == 0:
-        # With pinentry-mode loopback, this is the only prompt output by GPG
-        result = pex.expect(GPG_EXPECTS, timeout=30)
-        if result == 0:
-            pex.sendline(gpg_pass)
+    for rpm_path in rpm_paths:
 
-    pex.close()
-    ok = True
-    if result < 2 and pex.exitstatus == 0:
-        logging.getLogger('koji.plugin.sign').info('Package sign successful!')
-    else:
-        logging.getLogger('koji.plugin.sign').error(ERROR_MESSAGES.get(result, "Unknown signing error!"))
-        logging.getLogger('koji.plugin.sign').error("rpmsign exited with exit code %s, signal status %s", pex.exitstatus, pex.signalstatus)
-        ok = False
-    if not ok:
-        fout.seek(0)
-        # Add GPG errors to log
-        errors = ''
-        for line in fout.readlines():
-            errors += line.decode().replace(gpg_pass, '<gpg pass>')
-        fout.close()
-        raise Exception('Package sign failed!\n' + errors)
-    else:
-        fout.close()
+        # Add rpm output to a temporary file
+        fout = TemporaryFile()
+        pex = pexpect.spawn(rpm_cmd + " " + shlex.quote(rpm_path), timeout=SIGNING_TIMEOUT)
+        pex.logfile = fout
+
+        result = 0
+        # Yubikey occassionally requests password twice, I have no idea why
+        while result == 0:
+            # With pinentry-mode loopback, this is the only prompt output by GPG
+            result = pex.expect(GPG_EXPECTS, timeout=30)
+            if result == 0:
+                pex.sendline(gpg_pass)
+
+        pex.close()
+        ok = True
+        if result < 2 and pex.exitstatus == 0:
+            logging.getLogger('koji.plugin.sign').info('RPM signing of %s successful!', rpm_path)
+        else:
+            logging.getLogger('koji.plugin.sign').error(ERROR_MESSAGES.get(result, "Unknown signing error!"))
+            logging.getLogger('koji.plugin.sign').error("rpmsign exited with exit code %s, signal status %s while signing %s", pex.exitstatus, pex.signalstatus, rpm_path)
+            ok = False
+        if not ok:
+            fout.seek(0)
+            # Add GPG errors to log
+            errors = ''
+            for line in fout.readlines():
+                errors += line.decode().replace(gpg_pass, '<gpg pass>')
+            fout.close()
+            raise Exception(f'Package sign failed on {rpm_path}!\n{errors}')
+        else:
+            fout.close()
 
 
     # Sanity check, ensure that a signature exists for each rpm
